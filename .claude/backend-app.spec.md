@@ -1,5 +1,24 @@
 # BACKEND_SPEC.md — FastAPI + PostgreSQL Backend & Monorepo Restructure
 
+## PROMPT
+
+ok this works well as a SPA web app. great work, now lets create the backend for it
+i want to create a second SDD (spec-driven-development) manifest to accomplish the following
+
+isolate the web app tech stack into its own directory labeled frontend
+create a new directory for the backend labeled backend
+in the backend app i want a fast api that exposes the endpoints needed for the front-end to make the requests and return the responses the front-end expects to parse successful and failed response types
+in the backend directory i also want a database connector that connects to an actual database hosted in its own docker container in the compose stack
+i want hot reloading in the fastapi app
+i want the database to be postgresql
+at the end of this there should be 3 containers in the compose stack, the web app, the fastapi app, the postgres database
+the fast api does not need any authentication at the moment
+again i want the front end isolated in the codebase from the backend api (frontend, backend)
+create another sdd mark down file for this.
+any questions?
+
+---
+
 > **Purpose of this file:** A spec-driven development manifest for Claude Code, extending the existing SvelteKit frontend (see `web-app-spec.md`). It restructures the repo into `frontend/` + `backend/`, adds a FastAPI service backed by PostgreSQL, and orchestrates all three services in one Docker Compose stack. Build exactly as described. Values marked `[ASSUMPTION]` are chosen defaults — keep them unless told otherwise. Do **not** add features outside this spec (no auth, no extra endpoints beyond those listed).
 
 ---
