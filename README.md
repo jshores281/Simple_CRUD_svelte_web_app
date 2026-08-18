@@ -1,14 +1,16 @@
 # simple_webui — user management monorepo
 
-Two isolated apps orchestrated by one Docker Compose stack:
+Three isolated targets: two web services orchestrated by Docker Compose, plus a native desktop shell.
 
 | Directory | App | Port |
 | --- | --- | --- |
 | `frontend/` | SvelteKit 5 + TypeScript + Tailwind v4 SPA | 5173 |
 | `backend/` | FastAPI + async SQLAlchemy (asyncpg) | 8080 |
+| `desktop/` | Tauri 2 native shell around the same frontend (not Dockerized) | — |
 | — | PostgreSQL 16 (`db` service, named volume `pgdata`) | 5432 |
 
-Neither half shares tooling or code with the other; each has its own Dockerfile and dependency manifest.
+No target shares tooling or code with another; each has its own dependency manifest, and the two web
+services each have their own Dockerfile.
 
 ## Run
 
@@ -22,6 +24,17 @@ docker compose up --build
 - Postgres: `localhost:5432` (user `appuser`, password `apppassword`, db `appdb`)
 
 Editing `frontend/src` hot-reloads the browser (Vite HMR); editing `backend/app` reloads uvicorn.
+
+## Desktop app
+
+```bash
+docker compose up backend db      # API + database
+docker compose up frontend        # dev server on :5173 (or: npm --prefix frontend run dev)
+npm --prefix desktop run tauri dev
+```
+
+`npm --prefix desktop run tauri build` produces native installers. Prerequisites (Rust, Node 20+, OS
+webview deps) and details are in [desktop/README.md](desktop/README.md).
 
 ## API
 
