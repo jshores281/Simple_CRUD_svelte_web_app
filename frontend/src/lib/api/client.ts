@@ -3,11 +3,14 @@ const DEFAULT_BASE_URL = 'http://localhost:8080';
 /** Error thrown for every failed request — network failures included. */
 export class ApiError extends Error {
 	readonly status?: number;
+	/** Machine-readable code from the backend envelope, e.g. 'not_found', 'email_conflict'. */
+	readonly code?: string;
 
-	constructor(message: string, status?: number) {
+	constructor(message: string, status?: number, code?: string) {
 		super(message);
 		this.name = 'ApiError';
 		this.status = status;
+		this.code = code;
 	}
 }
 
@@ -31,24 +34,53 @@ interface RequestOptions {
 	body?: unknown;
 }
 
-/** Best-effort extraction of a server-supplied message from an error response. */
-async function errorMessage(response: Response): Promise<string> {
+/** The envelope every failed backend response uses: { error: { message, status, code } }. */
+interface ErrorEnvelope {
+	message: string;
+	status?: number;
+	code?: string;
+}
+
+/** Best-effort extraction of the server's error envelope; falls back to the HTTP status. */
+async function errorDetail(response: Response): Promise<ErrorEnvelope> {
+	const fallback: ErrorEnvelope = {
+		message: `Request failed with status ${response.status}${
+			response.statusText ? ` (${response.statusText})` : ''
+		}.`,
+		status: response.status
+	};
+
 	try {
 		const text = await response.text();
-		if (!text) return `Request failed with status ${response.status}.`;
+		if (!text) return fallback;
+
 		try {
 			const parsed: unknown = JSON.parse(text);
 			if (parsed && typeof parsed === 'object') {
-				const record = parsed as Record<string, unknown>;
-				const detail = record.message ?? record.error;
-				if (typeof detail === 'string' && detail.length > 0) return detail;
+				const envelope = (parsed as Record<string, unknown>).error;
+				if (envelope && typeof envelope === 'object') {
+					const record = envelope as Record<string, unknown>;
+					if (typeof record.message === 'string' && record.message.length > 0) {
+						return {
+							message: record.message,
+							status: typeof record.status === 'number' ? record.status : response.status,
+							code: typeof record.code === 'string' ? record.code : undefined
+						};
+					}
+				}
+				// A plain { message } / { detail } body from anything that isn't our backend.
+				const detail = (parsed as Record<string, unknown>).message ?? (parsed as Record<string, unknown>).detail;
+				if (typeof detail === 'string' && detail.length > 0) {
+					return { message: detail, status: response.status };
+				}
 			}
 		} catch {
 			// not JSON — fall through to the raw body
 		}
-		return text.slice(0, 300);
+
+		return { message: text.slice(0, 300), status: response.status };
 	} catch {
-		return `Request failed with status ${response.status}.`;
+		return fallback;
 	}
 }
 
@@ -71,7 +103,8 @@ async function request<T>({ method, path, body }: RequestOptions): Promise<T> {
 	}
 
 	if (!response.ok) {
-		throw new ApiError(await errorMessage(response), response.status);
+		const detail = await errorDetail(response);
+		throw new ApiError(detail.message, detail.status ?? response.status, detail.code);
 	}
 
 	if (response.status === 204) {
