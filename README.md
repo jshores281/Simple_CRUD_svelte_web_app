@@ -1,9 +1,14 @@
-# UserAdmin — CRUD user management SPA
+# simple_webui — user management monorepo
 
-A client-rendered SvelteKit (Svelte 5) + TypeScript + Tailwind v4 single-page app that performs CRUD
-operations on `User` records against a separate backend HTTP API. The backend is **not** part of this
-repo — every call is a real `fetch`, and each page degrades to a clear error state while the API is
-unavailable.
+Two isolated apps orchestrated by one Docker Compose stack:
+
+| Directory | App | Port |
+| --- | --- | --- |
+| `frontend/` | SvelteKit 5 + TypeScript + Tailwind v4 SPA | 5173 |
+| `backend/` | FastAPI + async SQLAlchemy (asyncpg) | 8080 |
+| — | PostgreSQL 16 (`db` service, named volume `pgdata`) | 5432 |
+
+Neither half shares tooling or code with the other; each has its own Dockerfile and dependency manifest.
 
 ## Run
 
@@ -11,37 +16,31 @@ unavailable.
 docker compose up --build
 ```
 
-Open <http://localhost:5173>. Editing anything under `src/` hot-reloads the browser.
+- Frontend: <http://localhost:5173>
+- API docs: <http://localhost:8080/docs>
+- Health: <http://localhost:8080/health>
+- Postgres: `localhost:5432` (user `appuser`, password `apppassword`, db `appdb`)
 
-To run outside Docker: `npm install && npm run dev`.
+Editing `frontend/src` hot-reloads the browser (Vite HMR); editing `backend/app` reloads uvicorn.
 
-## Configuration
+## API
 
-| Variable | Default | Purpose |
+| Operation | Endpoint | Success |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | `http://localhost:8080` | Base URL of the backend user API |
+| Create | `POST /users` | `201` |
+| List | `GET /users` | `200` |
+| Get one | `GET /users/{id}` | `200` |
+| Update (full replace) | `PUT /users/{id}` | `200` |
+| Delete | `DELETE /users/{id}` | `204` |
+| Health | `GET /health` | `200` |
 
-Set it in `.env` (see `.env.example`) for local runs, or in the `environment:` block of
-`docker-compose.yml` for the container.
+Every failure returns one envelope:
 
-## Pages
+```json
+{ "error": { "message": "...", "status": 404, "code": "not_found" } }
+```
 
-| Route | Operation |
-| --- | --- |
-| `/` | Home / entry point |
-| `/create` | `POST /users` |
-| `/read` | `GET /users` |
-| `/update` | `GET /users`, `GET /users/:id`, `PUT /users/:id` |
-| `/delete` | `GET /users`, `DELETE /users/:id` |
+Codes: `validation_error` (422), `not_found` (404), `email_conflict` (409), `internal_error` (500).
 
-## Layout
-
-- `src/lib/types/user.ts` — the `User` shape and input types (the single place to change it).
-- `src/lib/api/client.ts` — typed `fetch` wrapper; throws `ApiError` on any non-2xx or network failure.
-- `src/lib/api/users.ts` — one typed function per CRUD operation.
-- `src/lib/components/` — presentational components; pages own all data fetching.
-
-## Scripts
-
-- `npm run dev` — dev server
-- `npm run check` — `svelte-check` type check (strict, no `any`)
+Tables are created automatically on backend startup (no migrations), with a retry loop backing up the
+Compose healthcheck on `db`. There is no authentication.

@@ -1,14 +1,52 @@
 services:
-  web:
+  frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile.dev
     ports:
       - "5173:5173"
     volumes:
-      - .:/app                 # bind-mount source for hot reload
-      - /app/node_modules      # anonymous volume: keep container's deps, don't clobber with host
+      - ./frontend:/app
+      - /app/node_modules            # anonymous volume: preserve container deps
     environment:
-      - CHOKIDAR_USEPOLLING=true          # reliable file watching inside Docker
+      - CHOKIDAR_USEPOLLING=true
       - VITE_API_BASE_URL=http://localhost:8080
     command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app               # bind-mount for uvicorn --reload
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://appuser:apppassword@db:5432/appdb
+      - CORS_ORIGINS=http://localhost:5173
+      - WATCHFILES_FORCE_POLLING=true   # reliable reload over bind mounts in Docker
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=apppassword
+      - POSTGRES_DB=appdb
+    ports:
+      - "5432:5432"                  # exposed for local inspection; optional
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
