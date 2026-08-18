@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app                 # bind-mount source for hot reload
+      - /app/node_modules      # anonymous volume: keep container's deps, don't clobber with host
+    environment:
+      - CHOKIDAR_USEPOLLING=true          # reliable file watching inside Docker
+      - VITE_API_BASE_URL=http://localhost:8080
+    command: npm run dev -- --host 0.0.0.0
